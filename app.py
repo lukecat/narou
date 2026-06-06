@@ -12,10 +12,10 @@ st.sidebar.header("🎛 フィルタリング条件")
 
 max_point = st.sidebar.slider(
     "総合ポイントの上限 (これより下を検索)",
-    min_value=1000,
-    max_value=10000,
-    value=100,
-    step=100,
+    min_value=100,
+    max_value=20000,
+    value=1000,
+    step=50,
     help="ポイントが低めだが熱量の高い「隠れた名作」を発掘するための上限値です。"
 )
 
@@ -42,6 +42,7 @@ min_length = st.sidebar.slider(
     step=5000
 )
 
+# ジャンル選択
 genre_options = {
     "ハイファンタジー": "101",
     "ローファンタジー": "102",
@@ -55,6 +56,17 @@ genre_options = {
 }
 selected_genre_label = st.sidebar.selectbox("対象ジャンル", list(genre_options.keys()))
 selected_genre_code = genre_options[selected_genre_label]
+
+# 【新機能】異世界転生・転移の絞り込み（なろう公式パラメータ対応）
+tensei_options = {
+    "指定なし (転生・転移どちらも含める)": "none",
+    "「異世界転生」のみに絞り込む": "tensei",
+    "「異世界転移」のみに絞り込む": "teni",
+    "「転生」または「転移」に絞り込む": "both",
+    "「転生」「転移」をすべて除外する": "exclude"
+}
+selected_tensei_label = st.sidebar.selectbox("異世界転生・転移の設定", list(tensei_options.keys()))
+selected_tensei_code = tensei_options[selected_tensei_label]
 
 exclude_commercial = st.sidebar.checkbox("書籍化・コミカライズ済みの作品を除外する", value=True)
 
@@ -73,7 +85,7 @@ order_code = order_options[selected_order]
 
 
 @st.cache_data(ttl=300)
-def fetch_narou_data(genre_code, order_code):
+def fetch_narou_data(genre_code, order_code, tensei_code):
     url = "https://api.syosetu.com/novelapi/api/"
     
     payload = {
@@ -83,8 +95,20 @@ def fetch_narou_data(genre_code, order_code):
         "of": "t-w-n-s-k-g-gp-l-f" 
     }
     
+    # 1. ジャンル指定
     if genre_code:
         payload["genre"] = genre_code
+        
+    # 2. 異世界転生・転移パラメータ指定（公式API仕様に準拠）
+    if tensei_code == "tensei":
+        payload["istensei"] = 1       # 異世界転生ありのみ抽出
+    elif tensei_code == "teni":
+        payload["istenni"] = 1        # 異世界転移ありのみ抽出
+    elif tensei_code == "both":
+        payload["istt"] = 1           # 転生または転移ありのみ抽出
+    elif tensei_code == "exclude":
+        payload["istensei"] = 2       # 異世界転生なし
+        payload["istenni"] = 2        # 異世界転移なし
         
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -115,8 +139,8 @@ def fetch_narou_data(genre_code, order_code):
     except Exception as e:
         return {"error": f"通信に失敗しました: {e}"}
 
-# データ取得
-result = fetch_narou_data(selected_genre_code, order_code)
+# データ取得 (要素の絞り込みフラグをキャッシュキーに加える)
+result = fetch_narou_data(selected_genre_code, order_code, selected_tensei_code)
 
 # サイドバーにログ出力
 with st.sidebar:
@@ -133,8 +157,6 @@ else:
 
 # フィルタリング
 filtered_novels = []
-
-# 【機能強化】除外キーワードリストを拡充（電子、コミックなども追加）
 banned_keywords = [
     "書籍化", "コミカライズ", "アニメ化", "出版", "発売", "文庫", 
     "電子書籍", "コミック", "単行本", "メディアミックス","外伝",
@@ -147,17 +169,16 @@ for n in novels:
     length = n.get("length", 0)
     fav_count = n.get("fav_novel_cnt", 0) 
     
-    # 【重要変更】タイトル、あらすじ、タグ（キーワード）を結合して、チェック用の文章を作る
     title = n.get("title", "")
     story = n.get("story", "")
     combined_text = f"{title}\n{story}\n{keywords}"
     
-    # 1. 商業化済み除外フィルター（タイトル、あらすじ、タグのすべてを対象に検索）
+    # 1. 商業化済み除外フィルター
     if exclude_commercial:
         if any(bk in combined_text for bk in banned_keywords):
             continue
             
-    # 2. 総合ポイントの上限チェック（「上限無視」がOFFの場合のみ適用）
+    # 2. 総合ポイントの上限チェック
     if not ignore_max_point:
         if global_point > max_point:
             continue
