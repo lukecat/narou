@@ -23,7 +23,7 @@ max_point = st.sidebar.slider(
 ignore_max_point = st.sidebar.checkbox(
     "総合ポイント上限による除外を無効にする", 
     value=False,
-    help="【重要】累計ブックマーク順や累計ポイント順で検索する場合、このチェックをONにしないと検索結果が0件になります。"
+    help="【重要】累計ブックマーク順や累計ポイント順で検索する場合や、転生・転移ありに絞り込む場合は、このチェックをONにしないと検索結果が0件になります。"
 )
 
 min_fav = st.sidebar.slider(
@@ -57,7 +57,7 @@ genre_options = {
 selected_genre_label = st.sidebar.selectbox("対象ジャンル", list(genre_options.keys()))
 selected_genre_code = genre_options[selected_genre_label]
 
-# 【新機能】異世界転生・転移の絞り込み（なろう公式パラメータ対応）
+# 異世界転生・転移の絞り込み
 tensei_options = {
     "指定なし (転生・転移どちらも含める)": "none",
     "「異世界転生」のみに絞り込む": "tensei",
@@ -99,7 +99,7 @@ def fetch_narou_data(genre_code, order_code, tensei_code):
     if genre_code:
         payload["genre"] = genre_code
         
-    # 2. 異世界転生・転移パラメータ指定（公式API仕様に準拠）
+    # 2. 異世界転生・転移パラメータ指定（公式API仕様に正確に修正）
     if tensei_code == "tensei":
         payload["istensei"] = 1       # 異世界転生ありのみ抽出
     elif tensei_code == "teni":
@@ -107,8 +107,7 @@ def fetch_narou_data(genre_code, order_code, tensei_code):
     elif tensei_code == "both":
         payload["istt"] = 1           # 転生または転移ありのみ抽出
     elif tensei_code == "exclude":
-        payload["istensei"] = 2       # 異世界転生なし
-        payload["istenni"] = 2        # 異世界転移なし
+        payload["nottt"] = 1          # 【修正】転生・転移のいずれも除外する公式パラメータ
         
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -139,7 +138,7 @@ def fetch_narou_data(genre_code, order_code, tensei_code):
     except Exception as e:
         return {"error": f"通信に失敗しました: {e}"}
 
-# データ取得 (要素の絞り込みフラグをキャッシュキーに加える)
+# データ取得
 result = fetch_narou_data(selected_genre_code, order_code, selected_tensei_code)
 
 # サイドバーにログ出力
@@ -187,7 +186,7 @@ for n in novels:
     if fav_count < min_fav or length < min_length:
         continue
         
-    # 4. 独自熱量スコア（ゼロ除算を防ぎつつ算出）
+    # 4. 独自熱量スコア
     length_unit = length / 10000
     if length_unit > 0:
         score = fav_count / length_unit
@@ -204,10 +203,10 @@ filtered_novels = sorted(filtered_novels, key=lambda x: x["custom_score"], rever
 # 表示
 st.subheader("🌟 本日の厳選・発掘作品")
 if novels and not filtered_novels:
-    if (selected_order in ["【累計】ブックマーク数の多い順 (favnovelcnt)", "【累計】総合評価の高い順 (hyoka)"]) and not ignore_max_point:
-        st.warning("⚠️ 累計ランキングを表示しています。累計順の作品はポイントが非常に高いため、「総合ポイント上限による除外を無効にする」チェックをONにしてください。")
+    if not ignore_max_point:
+        st.warning("⚠️ 候補作品が見つかりません。転生・転移ありの作品、または累計順の作品はポイントが非常に高いため、「総合ポイント上限による除外を無効にする」チェックをONにするか、上限スライダーを右に動かしてください。")
     else:
-        st.info("データは正常に取得できましたが、厳格なフィルターにより全作品が除外されました。左側のサイドバーでスライダーを調整して条件を緩めてみてください。")
+        st.info("データは正常に取得できましたが、厳格なフィルターにより全作品が除外されました。最低ブックマーク数などの条件を少し緩めてみてください。")
 elif filtered_novels:
     st.success(f"{len(filtered_novels)}件の候補から、独自熱量スコアの高い上位5件を表示しています。")
     for idx, novel in enumerate(filtered_novels[:5]):
