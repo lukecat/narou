@@ -4,18 +4,18 @@ import json
 import re
 
 st.set_page_config(page_title="なろう名作発掘スコッパー", layout="centered")
-st.title("🔍 隠れた名作発掘システム")
+st.title("?? 隠れた名作発掘システム")
 st.write("「書籍化」や「巨大テンプレ」に埋もれない、熱量の高い未発掘作品を提案します。")
 
 # --- サイドバーで条件を動的に調整できるようにする ---
-st.sidebar.header("🎛 フィルタリング条件")
+st.sidebar.header("?? フィルタリング条件")
 
 max_point = st.sidebar.slider(
     "総合ポイントの上限 (これより下を検索)",
-    min_value=100,
-    max_value=20000,
-    value=1000,
-    step=50,
+    min_value=10000,
+    max_value=200000,
+    value=50000,
+    step=5000,
     help="ポイントが低めだが熱量の高い「隠れた名作」を発掘するための上限値です。"
 )
 
@@ -99,15 +99,15 @@ def fetch_narou_data(genre_code, order_code, tensei_code):
     if genre_code:
         payload["genre"] = genre_code
         
-    # 2. 異世界転生・転移パラメータ指定（公式API仕様に正確に修正）
+    # 2. 異世界転生・転移パラメータ指定
     if tensei_code == "tensei":
-        payload["istensei"] = 1       # 異世界転生ありのみ抽出
+        payload["istensei"] = 1       
     elif tensei_code == "teni":
-        payload["istenni"] = 1        # 異世界転移ありのみ抽出
+        payload["istenni"] = 1        
     elif tensei_code == "both":
-        payload["istt"] = 1           # 転生または転移ありのみ抽出
+        payload["istt"] = 1           
     elif tensei_code == "exclude":
-        payload["nottt"] = 1          # 【修正】転生・転移のいずれも除外する公式パラメータ
+        payload["nottt"] = 1          
         
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -143,7 +143,7 @@ result = fetch_narou_data(selected_genre_code, order_code, selected_tensei_code)
 
 # サイドバーにログ出力
 with st.sidebar:
-    st.subheader("🛠 詳細な接続ログ")
+    st.subheader("?? 詳細な接続ログ")
     if "http_status" in st.session_state:
         st.write(f"HTTPステータス: {st.session_state['http_status']}")
         st.text_area("なろうからの実際の返答", st.session_state["raw_response"], height=150)
@@ -158,8 +158,7 @@ else:
 filtered_novels = []
 banned_keywords = [
     "書籍化", "コミカライズ", "アニメ化", "出版", "発売", "文庫", 
-    "電子書籍", "コミック", "単行本", "メディアミックス","外伝",
-    "続編","番外編","置き場","発売中"
+    "電子書籍", "コミック", "単行本", "メディアミックス","発売中"
 ]
 
 for n in novels:
@@ -168,6 +167,15 @@ for n in novels:
     length = n.get("length", 0)
     fav_count = n.get("fav_novel_cnt", 0) 
     
+    # 【追加：バグ対策】ジャンルの徹底的なダブルチェック
+    # APIから混入した他ジャンル、およびStreamlitキャッシュの誤動作による他ジャンルを100%カットします
+    if selected_genre_code:
+        # "101-102" や "101" から [101, 102] のような許可ジャンルリストを作成
+        allowed_genres = [int(g) for g in selected_genre_code.split("-") if g.isdigit()]
+        novel_genre = n.get("genre", 0)
+        if novel_genre not in allowed_genres:
+            continue  # 許可されたジャンル以外は100%ここで弾く
+            
     title = n.get("title", "")
     story = n.get("story", "")
     combined_text = f"{title}\n{story}\n{keywords}"
@@ -186,7 +194,7 @@ for n in novels:
     if fav_count < min_fav or length < min_length:
         continue
         
-    # 4. 独自熱量スコア
+    # 4. 独自熱量スコア（ゼロ除算を防ぎつつ算出）
     length_unit = length / 10000
     if length_unit > 0:
         score = fav_count / length_unit
@@ -201,10 +209,10 @@ for n in novels:
 filtered_novels = sorted(filtered_novels, key=lambda x: x["custom_score"], reverse=True)
 
 # 表示
-st.subheader("🌟 本日の厳選・発掘作品")
+st.subheader("?? 本日の厳選・発掘作品")
 if novels and not filtered_novels:
     if not ignore_max_point:
-        st.warning("⚠️ 候補作品が見つかりません。転生・転移ありの作品、または累計順の作品はポイントが非常に高いため、「総合ポイント上限による除外を無効にする」チェックをONにするか、上限スライダーを右に動かしてください。")
+        st.warning("?? 候補作品が見つかりません。転生・転移ありの作品、または累計順の作品はポイントが非常に高いため、「総合ポイント上限による除外を無効にする」チェックをONにするか、上限スライダーを右に動かしてください。")
     else:
         st.info("データは正常に取得できましたが、厳格なフィルターにより全作品が除外されました。最低ブックマーク数などの条件を少し緩めてみてください。")
 elif filtered_novels:
