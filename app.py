@@ -4,18 +4,18 @@ import json
 import re
 
 st.set_page_config(page_title="なろう名作発掘スコッパー", layout="centered")
-st.title("?? 隠れた名作発掘システム")
+st.title("🔍 隠れた名作発掘システム")
 st.write("「書籍化」や「巨大テンプレ」に埋もれない、熱量の高い未発掘作品を提案します。")
 
 # --- サイドバーで条件を動的に調整できるようにする ---
-st.sidebar.header("?? フィルタリング条件")
+st.sidebar.header("🎛 フィルタリング条件")
 
 max_point = st.sidebar.slider(
     "総合ポイントの上限 (これより下を検索)",
-    min_value=10000,
+    min_value=1000,
     max_value=200000,
     value=50000,
-    step=5000,
+    step=500,
     help="ポイントが低めだが熱量の高い「隠れた名作」を発掘するための上限値です。"
 )
 
@@ -42,14 +42,14 @@ min_length = st.sidebar.slider(
     step=5000
 )
 
-# ジャンル選択
+# 【バグ修正】なろう公式仕様の正しいジャンルコードに修正
 genre_options = {
-    "ハイファンタジー": "101",
-    "ローファンタジー": "102",
-    "ファンタジー (ハイ/ロー)": "101-102",
-    "異世界恋愛": "201",
-    "現実世界恋愛": "202",
-    "恋愛 (両方)": "201-202",
+    "ハイファンタジー": "201",
+    "ローファンタジー": "202",
+    "ファンタジー (ハイ/ロー)": "201-202",
+    "異世界恋愛": "101",
+    "現実世界恋愛": "102",
+    "恋愛 (両方)": "101-102",
     "文芸 (推理/歴史/コメディ等)": "301-302-303-304-305-306-307",
     "SF (宇宙/空想科学等)": "401-402-403-404",
     "全ジャンル対象 (指定なし)": ""
@@ -143,7 +143,7 @@ result = fetch_narou_data(selected_genre_code, order_code, selected_tensei_code)
 
 # サイドバーにログ出力
 with st.sidebar:
-    st.subheader("?? 詳細な接続ログ")
+    st.subheader("🛠 詳細な接続ログ")
     if "http_status" in st.session_state:
         st.write(f"HTTPステータス: {st.session_state['http_status']}")
         st.text_area("なろうからの実際の返答", st.session_state["raw_response"], height=150)
@@ -158,7 +158,7 @@ else:
 filtered_novels = []
 banned_keywords = [
     "書籍化", "コミカライズ", "アニメ化", "出版", "発売", "文庫", 
-    "電子書籍", "コミック", "単行本", "メディアミックス","発売中"
+    "電子書籍", "コミック", "単行本", "メディアミックス"
 ]
 
 for n in novels:
@@ -168,9 +168,7 @@ for n in novels:
     fav_count = n.get("fav_novel_cnt", 0) 
     
     # 【追加：バグ対策】ジャンルの徹底的なダブルチェック
-    # APIから混入した他ジャンル、およびStreamlitキャッシュの誤動作による他ジャンルを100%カットします
     if selected_genre_code:
-        # "101-102" や "101" から [101, 102] のような許可ジャンルリストを作成
         allowed_genres = [int(g) for g in selected_genre_code.split("-") if g.isdigit()]
         novel_genre = n.get("genre", 0)
         if novel_genre not in allowed_genres:
@@ -208,19 +206,48 @@ for n in novels:
 # 独自熱量スコアの高い順にソート
 filtered_novels = sorted(filtered_novels, key=lambda x: x["custom_score"], reverse=True)
 
+# ジャンル表示用のマッピング辞書
+genre_mapping = {
+    101: "異世界恋愛",
+    102: "現実世界恋愛",
+    201: "ハイファンタジー",
+    202: "ローファンタジー",
+    301: "純文学",
+    302: "ヒューマンドラマ",
+    303: "歴史",
+    304: "推理",
+    305: "ホラー",
+    306: "アクション",
+    307: "コメディー",
+    399: "文芸その他",
+    401: "VRゲーム",
+    402: "宇宙",
+    403: "空想科学",
+    404: "パニック",
+    9901: "ノンジャンル",
+    9902: "童話",
+    9903: "詩",
+    9904: "エッセイ",
+    9999: "その他"
+}
+
 # 表示
-st.subheader("?? 本日の厳選・発掘作品")
+st.subheader("🌟 本日の厳選・発掘作品")
 if novels and not filtered_novels:
     if not ignore_max_point:
-        st.warning("?? 候補作品が見つかりません。転生・転移ありの作品、または累計順の作品はポイントが非常に高いため、「総合ポイント上限による除外を無効にする」チェックをONにするか、上限スライダーを右に動かしてください。")
+        st.warning("⚠️ 候補作品が見つかりません。転生・転移ありの作品、または累計順の作品はポイントが非常に高いため、「総合ポイント上限による除外を無効にする」チェックをONにするか、上限スライダーを右に動かしてください。")
     else:
         st.info("データは正常に取得できましたが、厳格なフィルターにより全作品が除外されました。最低ブックマーク数などの条件を少し緩めてみてください。")
 elif filtered_novels:
     st.success(f"{len(filtered_novels)}件の候補から、独自熱量スコアの高い上位5件を表示しています。")
     for idx, novel in enumerate(filtered_novels[:5]):
         with st.container():
+            # ジャンル名を日本語化
+            novel_genre_id = novel.get("genre", 0)
+            genre_name = genre_mapping.get(novel_genre_id, f"その他({novel_genre_id})")
+            
             st.markdown(f"### {idx+1}. {novel['title']}")
-            st.caption(f"作者: {novel['writer']} | 総文字数: {novel['length']:,}文字 | ブックマーク: {novel['fav_count_display']:,} | 総合ポイント: {novel['global_point']:,}")
+            st.caption(f"作者: {novel['writer']} | ジャンル: {genre_name} | 総文字数: {novel['length']:,}文字 | ブックマーク: {novel['fav_count_display']:,} | 総合ポイント: {novel['global_point']:,}")
             st.write(novel['story'][:200] + "...")
             url = f"https://ncode.syosetu.com/{novel['ncode'].lower()}/"
             st.markdown(f"[この作品を発掘する（なろうで読む）]({url})")
