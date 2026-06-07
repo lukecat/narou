@@ -12,9 +12,9 @@ st.sidebar.header("🎛 フィルタリング条件")
 
 max_point = st.sidebar.slider(
     "総合ポイントの上限 (これより下を検索)",
-    min_value=1000,
-    max_value=200000,
-    value=50000,
+    min_value=100,
+    max_value=20000,
+    value=1000,
     step=500,
     help="ポイントが低めだが熱量の高い「隠れた名作」を発掘するための上限値です。"
 )
@@ -158,7 +158,8 @@ else:
 filtered_novels = []
 banned_keywords = [
     "書籍化", "コミカライズ", "アニメ化", "出版", "発売", "文庫", 
-    "電子書籍", "コミック", "単行本", "メディアミックス"
+    "電子書籍", "コミック", "単行本", "メディアミックス",
+    "～ 番外編 ～","SS置き場"
 ]
 
 for n in novels:
