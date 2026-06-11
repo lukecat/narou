@@ -4,6 +4,34 @@ import json
 import re
 from datetime import datetime
 
+# =========================================================================
+# 🛠️ 【開発者専用】ブラックリスト＆AI小説除外設定
+# =========================================================================
+# 閲覧者には見えない、開発者専用の管理エリアです。
+# 排除したい作者名、ユーザーID、特定の話数をここに直接書き込んでください。
+
+# 1. 除外したい作者名（部分一致で判定されます。カンマ区切りのリストで追加してください）
+DEVELOPER_BANNED_WRITERS = [
+    "怪しい作者A",
+    "謎の大量投稿者B",
+    # ここに自由に作者名を追加してください（例: "あいうえお", "かきくけこ"）
+]
+
+# 2. 除外したいユーザーID（作者名が変わっても狙い撃ちできます。文字列で追加してください）
+DEVELOPER_BANNED_USERIDS = [
+    "123456",
+    "789012",
+    # ここに自由にユーザーID（なろうのマイページURLの数字部分）を追加してください
+]
+
+# 3. 除外したい特定のエピソード話数（AI生成に多い「70話きっちり」などを指定します）
+DEVELOPER_BANNED_EPISODES = [
+    70,
+    # 70話以外にも一括で弾きたい特定の連載話数（例: 50, 100 など）があればここに追加します
+]
+
+# =========================================================================
+
 st.set_page_config(page_title="なろう名作発掘スコッパー", layout="centered")
 st.title("🔍 隠れた名作発掘システム")
 st.write("「書籍化」や「巨大テンプレ」に埋もれない、熱量の高い未発掘作品を提案します。")
@@ -79,39 +107,6 @@ exclude_no_point = st.sidebar.checkbox(
     help="有名な作家のSS置き場など、ブックマークはされているが「評価（ポイント投票）」の受付をOFFにしている作品を除外します。"
 )
 
-# --- 【新機能】AI対策・ブラックリスト詳細設定 ---
-st.sidebar.markdown("---")
-st.sidebar.subheader("🤖 AI対策・ブラックリスト設定")
-
-# 1. 除外する作者名
-exclude_writers_input = st.sidebar.text_input(
-    "除外する作者名（部分一致・カンマ区切り）",
-    value="",
-    placeholder="例: 怪しい作者A, 怪しい作者B"
-)
-
-# 2. 除外するユーザーID（作者名が変わってもIDで狙い撃ち可能）
-exclude_userids_input = st.sidebar.text_input(
-    "除外するユーザーID（完全一致・カンマ区切り）",
-    value="",
-    placeholder="例: 123456, 789012"
-)
-
-# 3. 特定の話数の作品を除外（70話きっちりで終わるパターンを撃退）
-exclude_episodes_input = st.sidebar.text_input(
-    "除外する特定の話数（カンマ区切り）",
-    value="70",  # デフォルトで70話完結作品を除外
-    help="AIが生成する、きっちり特定の話数（例: 70話）だけで終わっている作品を一括で除外します。"
-)
-
-# 4. 人間離れした投稿速度の作品を自動除外
-exclude_fast_writing = st.sidebar.checkbox(
-    "人間離れした超ハイスピード連載を除外 (AI疑い)",
-    value=True,
-    help="1日平均 25,000文字を超えるような異常な執筆ペースで投稿された連載作品を、AIによる大量投下とみなして自動的に除外します。"
-)
-
-
 order_options = {
     "週間ユニークユーザー順 (weekly)": "weekly",
     "日間ポイント順 (dailypoint)": "dailypoint",
@@ -134,7 +129,6 @@ def fetch_narou_data(genre_code, order_code, tensei_code):
         "out": "json",
         "lim": 400,                 
         "order": order_code,
-        # 【機能拡張】u:ユーザーID, ga:全掲載話数, gf:初回掲載日, gl:最終掲載日, nt:小説タイプ(短編/連載)を追加
         "of": "t-w-n-s-k-g-gp-l-f-a-its-iti-u-ga-gf-gl-nt" 
     }
     
@@ -197,11 +191,6 @@ if isinstance(result, dict) and "error" in result:
 else:
     novels = result
 
-# ブラックリストとAI除外リストのパース
-exclude_writers = [w.strip() for w in exclude_writers_input.split(",") if w.strip()]
-exclude_userids = [u.strip() for u in exclude_userids_input.split(",") if u.strip()]
-exclude_episodes = [int(ep.strip()) for ep in exclude_episodes_input.split(",") if ep.strip().isdigit()]
-
 # フィルタリング
 filtered_novels = []
 banned_keywords = [
@@ -226,41 +215,41 @@ for n in novels:
     novel_istensei = n.get("istensei", 0)
     novel_istenni = n.get("istenni", 0)
     
-    # --- AI対策・ブラックリストフィルター ---
+    # -------------------------------------------------------------------------
+    # 🤖 【開発者専用】ブラックリスト＆AI小説除外処理
+    # -------------------------------------------------------------------------
     
-    # A. 作者名による除外（ブラックリスト・部分一致）
-    if any(ew in writer for ew in exclude_writers):
+    # A. 開発者指定の作者名による除外（部分一致）
+    if any(ew in writer for ew in DEVELOPER_BANNED_WRITERS):
         continue
         
-    # B. ユーザーIDによる除外（ブラックリスト・完全一致）
-    if userid in exclude_userids:
+    # B. 開発者指定のユーザーIDによる除外（完全一致）
+    if userid in DEVELOPER_BANNED_USERIDS:
         continue
         
-    # C. 特定の掲載話数による除外（70話完結対策）
-    if episode_count in exclude_episodes:
+    # C. 開発者指定の特定の話数による除外（70話完結などの対策）
+    if episode_count in DEVELOPER_BANNED_EPISODES:
         continue
         
-    # D. 異常な投稿速度の作品を除外（AIによる連載一挙投下対策）
-    if exclude_fast_writing and novel_type == 1:
+    # D. 異常な投稿速度の作品を除外（一律強制適用：1日平均 2.5万字を超える連載）
+    if novel_type == 1:
         first_up_str = n.get("general_firstup", "")
         last_up_str = n.get("general_lastup", "")
         if first_up_str and last_up_str:
             try:
-                # 掲載開始日と終了日の日付差を算出
                 first_up = datetime.strptime(first_up_str, "%Y-%m-%d %H:%M:%S")
                 last_up = datetime.strptime(last_up_str, "%Y-%m-%d %H:%M:%S")
                 diff_days = (last_up - first_up).days
                 if diff_days <= 0:
-                    diff_days = 1  # 1日未満で完結・投下された場合
+                    diff_days = 1  
                 
-                # 1日あたりの平均連載文字数
                 daily_speed = length / diff_days
-                
-                # 1日あたり2.5万文字以上のペースで連載（一挙投稿含む）されていたら除外
                 if daily_speed > 25000:
-                    continue
+                    continue  # AI疑いとしてスキップ
             except Exception:
                 pass
+                
+    # -------------------------------------------------------------------------
                 
     # ジャンルの徹底的なダブルチェック
     if selected_genre_code:
@@ -359,6 +348,7 @@ elif filtered_novels:
     st.success(f"{len(filtered_novels)}件の候補から、独自熱量スコアの高い上位5件を表示しています。")
     for idx, novel in enumerate(filtered_novels[:5]):
         with st.container():
+            # ジャンル名を日本語化
             novel_genre_id = novel.get("genre", 0)
             genre_name = genre_mapping.get(novel_genre_id, f"その他({novel_genre_id})")
             
@@ -371,7 +361,6 @@ elif filtered_novels:
             tag_text = f" | 要素: {', '.join(tag_list)}" if tag_list else ""
             
             st.markdown(f"### {idx+1}. {novel['title']}")
-            # キャプションに「ユーザーID」と「話数（掲載エピソード数）」を表示
             st.caption(
                 f"作者: {novel['writer']} (ID: {novel['user_id_display']}) | "
                 f"ジャンル: {genre_name}{tag_text} | "
