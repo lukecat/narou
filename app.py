@@ -10,17 +10,18 @@ from datetime import datetime
 # 閲覧者には見えない、開発者専用の管理エリアです。
 # 排除したい作者名、ユーザーID、特定の話数をここに直接書き込んでください。
 
-# 1. 除外したい作者名（部分一致で判定されます。カンマ区切りのリストで追加してください）
+# 1. 除外したい作者名（部分一致で判定。カンマ区切りのリストで追加してください）
 DEVELOPER_BANNED_WRITERS = [
     "怪しい作者A",
     "謎の大量投稿者B",
-    # ここに自由に作者名を追加してください（例: "あいうえお", "かきくけこ"）
+    # ここに自由に作者名を追加してください
 ]
 
 # 2. 除外したいユーザーID（作者名が変わっても狙い撃ちできます。文字列で追加してください）
 DEVELOPER_BANNED_USERIDS = [
     "3056510",
     "2736670",
+    "2868332",
     # ここに自由にユーザーID（なろうのマイページURLの数字部分）を追加してください
 ]
 
@@ -28,6 +29,15 @@ DEVELOPER_BANNED_USERIDS = [
 DEVELOPER_BANNED_EPISODES = [
     70,
     # 70話以外にも一括で弾きたい特定の連載話数（例: 50, 100 など）があればここに追加します
+]
+
+# 4. 常時除外したいAI関連のキーワード（公式の「AI直接使用」タグを狙い撃ちして除外します）
+# タイトル、あらすじ、タグキーワードのすべてが監視対象になります。
+AI_BANNED_KEYWORDS = [
+    "AI直接使用",    # なろう公式が自動付与するAI申告キーワード
+    "AI生成",
+    "AI小説",
+    "AIイラスト"
 ]
 
 # =========================================================================
@@ -276,6 +286,10 @@ for n in novels:
     story = n.get("story", "")
     combined_text = f"{title}\n{story}\n{keywords}"
     
+    # 【新設】E. AI小説関連のキーワードによる自動除外（「AI直接使用」などを常時弾く）
+    if any(ak in combined_text for ak in AI_BANNED_KEYWORDS):
+        continue
+        
     # 1. 商業化済み除外フィルター
     if exclude_commercial:
         if any(bk in combined_text for bk in banned_keywords):
@@ -361,6 +375,7 @@ elif filtered_novels:
             tag_text = f" | 要素: {', '.join(tag_list)}" if tag_list else ""
             
             st.markdown(f"### {idx+1}. {novel['title']}")
+            # キャプションに「ユーザーID」と「話数（掲載エピソード数）」を表示
             st.caption(
                 f"作者: {novel['writer']} (ID: {novel['user_id_display']}) | "
                 f"ジャンル: {genre_name}{tag_text} | "
